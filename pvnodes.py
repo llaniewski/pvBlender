@@ -120,7 +120,7 @@ def register():
         mylist = [i for i in dir(mod) if i[0] != "_"]
         retlist = []
         for k in mylist:
-            c = "pv" + k
+            c = "pvSimple" + k
             if c not in my_pvClasses:
                 print("adding class ",c,"with object", k)
                 new_class = type(c, (bpy.types.Node,pvNode), {
@@ -148,7 +148,6 @@ def register():
 def unregister():
     global my_pvClasses
     print("------------------------- UNREGISTER PV -------------------")
-    bpy.utils.unregister_class(pvPropertyUnion)
     bpy.utils.unregister_class(pvPropName)
     bpy.utils.unregister_class(pvPropString)
     bpy.utils.unregister_class(pvPropFloat)
