@@ -1,4 +1,5 @@
 import bpy
+import bmesh
 import paraview
 import paraview.simple
 import paraview.servermanager
@@ -26,6 +27,24 @@ def PolyDataMesh(pdata, ob):
         me.from_pydata(verts, [], faces)
         print("replaced ...")
         bpy.context.scene.objects.active = ob    
+
+
+def polydata_ids(cell):
+    return [ cell.GetPointId(i) for i in range(cell.GetNumberOfPoints()) ]
+def polydata_point(point):
+    return [ point[i] for i in range(3) ]
+
+def bmesh_from_polydata(bm, pdata):
+    bm.clear()
+    verts = [ bm.verts.new(polydata_point(pdata.GetPoint(i))) for i in range(pdata.GetNumberOfPoints()) ]
+    for i in range(pdata.GetNumberOfCells()):
+        cell = pdata.GetCell(i)
+        if pdata.GetCellType(i)==5:
+            bm.faces.new((verts[i] for i in polydata_ids(cell)))
+        if pdata.GetCellType(i)==9:
+            bm.faces.new((verts[i] for i in polydata_ids(cell)))
+#            bm.faces.new((cell.GetPointId(0),cell.GetPointId(1),cell.GetPointId(2),cell.GetPointId(3)))
+
 
 def post_init(something):
     global vtknodes_tmp_mesh

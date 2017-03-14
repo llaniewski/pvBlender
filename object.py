@@ -12,7 +12,7 @@ from .nodedata import pvDataNode
 import vtkCommonDataModelPython
 
 class pvObjectNode(bpy.types.Node):
-    bl_label = "Blender Object"
+    bl_label = "Blender Legacy Mesh"
     obName = bpy.props.StringProperty(default="VTKObj")
     def init(self, context):
         print("Init node: ", self.name)
@@ -43,19 +43,20 @@ class pvObjectNode(bpy.types.Node):
 import bmesh
 
 class pvBMeshNode(bpy.types.Node, pvDataNode):
-    bl_label = "Blender BMesh"
+    bl_label = "Blender Object"
     obName = bpy.props.StringProperty(default="VTKObj")
     def init(self, context):
         print("Init node: ", self.name)
-        self.inputs.new("pvNodeSocket", "Input")
         me = bpy.data.meshes.new(self.obName + "Mesh")
         ob = bpy.data.objects.new(self.obName, me)
         self.obName = ob.name
         bpy.context.scene.objects.link(ob)
         self.load_data()
+        self.inputs.new("pvNodeSocket", "Input")
     def init_data(self):
         self.data.ob = bpy.data.objects[self.obName]
-        self.data.bm = bmesh.from_edit_mesh(self.data.ob.data)
+        self.data.bm = bmesh.new()
+        self.data.bm.from_mesh(self.data.ob.data)
     def update(self):
         self.load_data()
         print("Updating node: ", self.name)
@@ -72,10 +73,9 @@ class pvBMeshNode(bpy.types.Node, pvDataNode):
             self.make_polydata(d)
     def make_polydata(self,pdata):
         bm = self.data.bm
-        for i in range(pdata.GetNumberOfPoints()):
-            point = pdata.GetPoint(i)
-            bm.verts.append([point[0],point[1],point[2]])
+        polydata.bmesh_from_polydata(bm,pdata)
         bm.to_mesh(self.data.ob.data)
+        self.data.ob.data.update()
     def draw_buttons(self, context, layout):
         layout.prop(self, "obName", text="Object name")
     def free(self):
