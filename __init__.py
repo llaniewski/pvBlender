@@ -27,16 +27,13 @@ from .category import pvNodeCategory
 
 from bpy.app.handlers import persistent
 
-from . import pvnodes,inspector
+from . import pvnodes,inspector,object,polydata
 
 @persistent
 def post_init(something):
-    global my_pvClasses, vtknodes_tmp_mesh
+    global vtknodes_tmp_mesh
     print("------------------------- POST INIT  -------------------")
-    if "vtknodes_tmp_mesh" in bpy.data.meshes:
-        vtknodes_tmp_mesh = bpy.data.meshes["vtknodes_tmp_mesh"]
-    else:
-        vtknodes_tmp_mesh = bpy.data.meshes.new("vtknodes_tmp_mesh")
+    polydata.post_init(something)
     for g in bpy.data.node_groups:
         print(g)
         if type(g) == pvNodeTree:
@@ -55,6 +52,7 @@ def register():
     bpy.utils.register_class(pvNodeSocket)
     pvnodes.register()
     inspector.register()
+    object.register()
     if not post_init in bpy.app.handlers.load_post:
         bpy.app.handlers.load_post.append(post_init)
     if not post_init_once in bpy.app.handlers.scene_update_post:
@@ -66,6 +64,7 @@ def unregister():
     print("------------------------- UNREGISTER PV -------------------")
     pvnodes.unregister()
     inspector.unregister()
+    object.unregister()
     bpy.utils.unregister_class(pvNodeTree)
     bpy.utils.unregister_class(pvNodeSocket)
 
