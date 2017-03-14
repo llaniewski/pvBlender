@@ -23,7 +23,7 @@ class pvDataNode():
         return (self.data)
     def get_data(self):
         if self.dataId == "":  # no data yet
-            raise IndexError
+            return None
         if self.dataId not in _data_dict:
             raise IndexError
 #        print("[pv:DATA] Getting data[",self.dataId,"]")

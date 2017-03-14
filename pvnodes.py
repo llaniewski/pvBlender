@@ -59,8 +59,13 @@ def fn_set(self,p,value):
 
 def fn_get(self,p):
     data = self.get_data()
-    return str(data.pv.GetProperty(p))
+    return str(data.pv.GetProperty(p)[0])
 
+def fn_update(self,context,p):
+    self.load_data()
+    value = getattr(self,p)
+    print("Update filename:",self,p,value);
+    self.data.pv.SetPropertyWithName(p,bpy.path.abspath(value))
 
 def create_pv_prop(prop, p):
     if type(prop) == paraview.servermanager.VectorProperty:
@@ -83,9 +88,11 @@ def create_pv_prop(prop, p):
                 return bpy.props.IntProperty(default=prop[0])
             return bpy.props.IntVectorProperty(size=len(prop))
     if type(prop) == paraview.servermanager.FileNameProperty:
+#        return bpy.props.StringProperty(subtype="FILE_PATH",
+#            set=lambda self,value: fn_set(self,p,value),
+#            get=lambda self: fn_get(self,p))
         return bpy.props.StringProperty(subtype="FILE_PATH",
-            set=lambda self,value: fn_set(self,p,value),
-            get=lambda self: fn_get(self,p))
+            update=lambda self,context: fn_update(self,context,p))
     return bpy.props.StringProperty(default=str(type(prop)))
 #    ret = bpy.props.PointerProperty(type=pvPropString,name=p)
 #    ret = bpy.props.PointerProperty(type=pvPropFloat,name=p)
@@ -143,6 +150,18 @@ class pvNode(pvDataNode):
         print("Update ",self.bl_label)
         self.load_data()
         self.pv_props()
+        pv1 = self.data.pv
+        for socket in self.inputs:
+            if socket.is_linked and len(socket.links) > 0:
+                print("----------- Socket",socket.name,"connected!")
+                other = socket.links[0].from_socket.node
+                other.load_data()
+                pv2 = other.data.pv
+                pv1.SetPropertyWithName(socket.name, pv2)
+            else:
+                print("----------- Socket",socket.name,"connected!")
+                pv1.SetPropertyWithName(socket.name, None)
+            pv1.UpdatePipeline()
 
 import sys
 

@@ -27,6 +27,8 @@ class pvInspector(bpy.types.Node):
             layout.label("FieldData:")
             for i in pv.FieldData:
                 layout.label(str(i) + str(i.GetRange()))
+    def update(self):
+        pass
             
 from . import category
 
