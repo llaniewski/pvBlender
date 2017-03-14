@@ -39,20 +39,67 @@ class pvObjectNode(bpy.types.Node):
         layout.prop(self, "obName")
     def free(self):
         self.free_data()
+
+import bmesh
+
+class pvBMeshNode(bpy.types.Node, pvDataNode):
+    bl_label = "Blender BMesh"
+    obName = bpy.props.StringProperty(default="VTKObj")
+    def init(self, context):
+        print("Init node: ", self.name)
+        self.inputs.new("pvNodeSocket", "Input")
+        me = bpy.data.meshes.new(self.obName + "Mesh")
+        ob = bpy.data.objects.new(self.obName, me)
+        self.obName = ob.name
+        bpy.context.scene.objects.link(ob)
+        self.load_data()
+    def init_data(self):
+        self.data.ob = bpy.data.objects[self.obName]
+        self.data.bm = bmesh.from_edit_mesh(self.data.ob.data)
+    def update(self):
+        self.load_data()
+        print("Updating node: ", self.name)
+        socket = self.inputs["Input"]
+        if socket.is_linked and len(socket.links) > 0:
+            other = socket.links[0].from_socket.node
+            other.load_data()
+            pv = other.data.pv
+            print("Fetching data from",pv,"...")
+            pvd = paraview.servermanager.Fetch(pv)
+            self.make_mesh(pvd)
+    def make_mesh(self,d):
+        if type(d) == vtkCommonDataModelPython.vtkPolyData:
+            self.make_polydata(d)
+    def make_polydata(self,pdata):
+        bm = self.data.bm
+        for i in range(pdata.GetNumberOfPoints()):
+            point = pdata.GetPoint(i)
+            bm.verts.append([point[0],point[1],point[2]])
+        bm.to_mesh(self.data.ob.data)
+    def draw_buttons(self, context, layout):
+        layout.prop(self, "obName", text="Object name")
+    def free(self):
+        self.free_data()
+
             
 from . import category
 
 def register():
     bpy.utils.register_class(pvObjectNode)
+    bpy.utils.register_class(pvBMeshNode)
         
     categories = [
       category.pvNodeCategory("BVTK_Blender", "Blender",
-        items = [ nodeitems_utils.NodeItem("pvObjectNode") ]),
+        items = [
+            nodeitems_utils.NodeItem("pvObjectNode"),
+            nodeitems_utils.NodeItem("pvBMeshNode"),
+        ]),
     ]
     nodeitems_utils.register_node_categories("BVTK_CATEGORIES_Blend", categories)
 
 def unregister():
     bpy.utils.unregister_class(pvObjectNode)
+    bpy.utils.unregister_class(pvBMeshNode)
     nodeitems_utils.unregister_node_categories("BVTK_CATEGORIES_Blend")
 
 

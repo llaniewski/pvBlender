@@ -9,7 +9,7 @@ def PolyDataMesh(pdata, ob):
         print("replace mesh ...")
         me = ob.data
         ob.data = vtknodes_tmp_mesh
-        bpy.data.meshes.remove(me)
+        bpy.data.meshes.remove(me,do_unlink=True)
         me = bpy.data.meshes.new(ob.name + "Mesh")
         ob.data = me
         verts = []
