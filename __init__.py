@@ -27,7 +27,7 @@ from .category import pvNodeCategory
 
 from bpy.app.handlers import persistent
 
-from . import pvnodes
+from . import pvnodes,inspector
 
 @persistent
 def post_init(something):
@@ -54,6 +54,7 @@ def register():
     bpy.utils.register_class(pvNodeTree)
     bpy.utils.register_class(pvNodeSocket)
     pvnodes.register()
+    inspector.register()
     if not post_init in bpy.app.handlers.load_post:
         bpy.app.handlers.load_post.append(post_init)
     if not post_init_once in bpy.app.handlers.scene_update_post:
@@ -64,6 +65,7 @@ def unregister():
     global my_pvClasses
     print("------------------------- UNREGISTER PV -------------------")
     pvnodes.unregister()
+    inspector.unregister()
     bpy.utils.unregister_class(pvNodeTree)
     bpy.utils.unregister_class(pvNodeSocket)
 

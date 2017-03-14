@@ -18,9 +18,16 @@ class pvDataNode():
             self.data = pvData()
             _data_dict[self.dataId] = self.data
             self.init_data()
-        print("[pv:DATA] Getting data[",self.dataId,"]")
+#        print("[pv:DATA] Getting data[",self.dataId,"]")
         self.data = _data_dict[self.dataId]
         return (self.data)
+    def get_data(self):
+        if self.dataId == "":  # no data yet
+            raise IndexError
+        if self.dataId not in _data_dict:
+            raise IndexError
+#        print("[pv:DATA] Getting data[",self.dataId,"]")
+        return (_data_dict[self.dataId])
     def free_data(self):
         if self.dataId == "":  # no data yet
             return

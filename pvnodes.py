@@ -36,13 +36,43 @@ class pvPropFloat(bpy.types.PropertyGroup,pvPropBase):
         layout.prop(self, "v",text=p)
 
 
+def general_update(self,context):
+    print(self)
+    print(context)
+
+def general_set(self,p,value):
+    print("SET:",self,p,value)
+    data = self.get_data()
+    data.pv.SetPropertyWithName(p,value)
+    self[p] = value
+
+def general_get(self,p):
+#    print("GET:",self,p,self[p])
+    data = self.get_data()
+    return data.pv.GetProperty(p)[0]
+#    return self[p]
+
+def fn_set(self,p,value):
+    print("SET filename:",self,p,value)
+    data = self.get_data()
+    data.pv.SetPropertyWithName(p,bpy.path.abspath(value))
+
+def fn_get(self,p):
+    data = self.get_data()
+    return str(data.pv.GetProperty(p))
+
+
 def create_pv_prop(prop, p):
     if type(prop) == paraview.servermanager.VectorProperty:
         if len(prop) == 0:
             return bpy.props.FloatProperty(default=0.0)
         if type(prop[0]) == float:
             if len(prop) == 1:
-                return bpy.props.FloatProperty(default=prop[0])
+                return bpy.props.FloatProperty(default=prop[0],
+                    set=lambda self,value: general_set(self,p,value),
+                    get=lambda self: general_get(self,p))
+            if len(prop) == 3:
+                return bpy.props.FloatVectorProperty(subtype="TRANSLATION",default=[1,0,0])
             return bpy.props.FloatVectorProperty(size=len(prop))
         if type(prop[0]) == bool:
             if len(prop) == 1:
@@ -52,7 +82,10 @@ def create_pv_prop(prop, p):
             if len(prop) == 1:
                 return bpy.props.IntProperty(default=prop[0])
             return bpy.props.IntVectorProperty(size=len(prop))
-        
+    if type(prop) == paraview.servermanager.FileNameProperty:
+        return bpy.props.StringProperty(subtype="FILE_PATH",
+            set=lambda self,value: fn_set(self,p,value),
+            get=lambda self: fn_get(self,p))
     return bpy.props.StringProperty(default=str(type(prop)))
 #    ret = bpy.props.PointerProperty(type=pvPropString,name=p)
 #    ret = bpy.props.PointerProperty(type=pvPropFloat,name=p)
@@ -66,11 +99,12 @@ class pvNode(pvDataNode):
         print("Init ",self.bl_label)
         self.load_data()
         self.pv_props()
-        self.outputs.new("pvNodeSocket", "Output")
+        self.outputs.new("pvNodeSocket", self.data.pv.GetDataInformation().GetDataSetTypeAsString())
     def free(self):
         self.free_data()
     def draw_buttons(self, context, layout):
-        layout.label(type(self).__name__)
+        data=self.get_data()
+        layout.label(data.pv.GetDataInformation().GetDataSetTypeAsString())
         for n in self.propertyNames:
             p = n.s
             if hasattr(self,p):
@@ -80,6 +114,7 @@ class pvNode(pvDataNode):
                 else:
                     layout.prop(self,p)
     def init_data(self):
+        paraview.simple.SetActiveSource(None)
         self.data.pv = getattr(sys.modules["paraview.simple"],self.pvType)()
     def pv_props(self):
         op = {str(n) for n in self.data.pv.ListProperties()}
