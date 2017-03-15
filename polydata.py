@@ -33,10 +33,15 @@ def polydata_ids(cell):
     return [ cell.GetPointId(i) for i in range(cell.GetNumberOfPoints()) ]
 def polydata_point(point):
     return [ point[i] for i in range(3) ]
+def polydata_vertex(bm, pdata,lays,i):
+    vert = bm.verts.new(polydata_point(pdata.GetPoint(i)))
+    vert[lays[0]] = pdata.GetPoint(i)[0]
+    return(vert)
 
 def bmesh_from_polydata(bm, pdata):
     bm.clear()
-    verts = [ bm.verts.new(polydata_point(pdata.GetPoint(i))) for i in range(pdata.GetNumberOfPoints()) ]
+    lays = [ bm.verts.layers.float.new('G') ]
+    verts = [ polydata_vertex(bm, pdata,lays,i) for i in range(pdata.GetNumberOfPoints()) ]
     for i in range(pdata.GetNumberOfCells()):
         cell = pdata.GetCell(i)
         if pdata.GetCellType(i)==5:

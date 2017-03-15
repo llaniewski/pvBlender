@@ -67,7 +67,22 @@ def fn_update(self,context,p):
     print("Update filename:",self,p,value);
     self.data.pv.SetPropertyWithName(p,bpy.path.abspath(value))
 
+def get_prop_domain(prop):
+    i = prop.SMProperty.NewDomainIterator()
+    s = []
+    while i.GetKey() is not None:
+        s.append(i.GetKey())
+        i.Next()
+    dom = [ prop.SMProperty.GetDomain(i) for i in s ]
+    return (s,dom)
+
 def create_pv_prop(prop, p):
+    sdom,dom = get_prop_domain(prop)
+#    if len(sdom) == 1:
+#        sdom = sdom[0]
+#        if sdom == "bool":
+#            return bpy.props.BoolProperty()
+    return bpy.props.StringProperty(default=str(type(prop.SMProperty))+str(sdom))
     if type(prop) == paraview.servermanager.VectorProperty:
         if len(prop) == 0:
             return bpy.props.FloatProperty(default=0.0)
@@ -106,12 +121,12 @@ class pvNode(pvDataNode):
         print("Init ",self.bl_label)
         self.load_data()
         self.pv_props()
-        self.outputs.new("pvNodeSocket", self.data.pv.GetDataInformation().GetDataSetTypeAsString())
+        self.outputs.new("pvNodeSocket", "Output")
     def free(self):
         self.free_data()
     def draw_buttons(self, context, layout):
         data=self.get_data()
-        layout.label(data.pv.GetDataInformation().GetDataSetTypeAsString())
+#        layout.label(data.pv.GetDataInformation().GetDataSetTypeAsString())
         for n in self.propertyNames:
             p = n.s
             if hasattr(self,p):
@@ -178,20 +193,20 @@ def register():
 
     def pvClasses(mod):
         mylist = [i for i in dir(mod) if i[0] != "_"]
-        retlist = []
-        for k in mylist:
-            c = "pvSimple" + k
-            if c not in my_pvClasses:
-                print("adding class ",c,"with object", k)
-                new_class = type(c, (bpy.types.Node,pvNode), {
-                    "bl_label": k,
-                    "pvType": k
-                })
-                bpy.utils.register_class(new_class)
-                setattr(sys.modules[__name__], c,new_class)
-                my_pvClasses.append(c)
-            retlist.append(nodeitems_utils.NodeItem(c))
-        return(retlist)
+        return [ pvClass(k) for k in mylist ]
+
+    def pvClass(k):
+        c = "pvSimple" + k
+        if c not in my_pvClasses:
+            print("adding class ",c,"with object", k)
+            new_class = type(c, (bpy.types.Node,pvNode), {
+                "bl_label": k,
+                "pvType": k
+            })
+            bpy.utils.register_class(new_class)
+            setattr(sys.modules[__name__], c,new_class)
+            my_pvClasses.append(c)
+        return nodeitems_utils.NodeItem(c)
         
     categories = [
       category.pvNodeCategory("BVTK_SOURCES", "Sources",
@@ -200,6 +215,8 @@ def register():
         items = pvClasses(paraview.servermanager.filters)),
       category.pvNodeCategory("BVTK_WRITERS", "Writers",
         items = pvClasses(paraview.servermanager.writers)),
+      category.pvNodeCategory("BVTK_OTHER", "Other",
+        items = [ pvClass("CreateLookupTable") ]),
     ]
 
     nodeitems_utils.register_node_categories("BVTK_CATEGORIES", categories)
