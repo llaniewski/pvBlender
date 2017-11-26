@@ -10,3 +10,7 @@ A `Blender Object` node provides the possibility to add mesh object based on dat
 ### Filters
 Any ParaView filter can be used as a node:
 <p align="center"><img src="https://raw.githubusercontent.com/llaniewski/pvBlender/images/glyph.gif"/></p>
+
+### And then ...
+And then you can set smooth shading and render.
+<p align="center"><img src="https://raw.githubusercontent.com/llaniewski/pvBlender/images/render.gif"/></p>
