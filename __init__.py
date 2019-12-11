@@ -3,6 +3,12 @@ import bpy
 bl_info = {
   "name": "VTK nodes",
   "category": "Node",
+    "author":      "Lukasz Laniewski-Wollk",
+    "version":     (0, 1, 0),
+    "blender":     (2, 80, 0),
+    "location":    "VTK Nodes",
+    "category":    "Node",
+    "warning":     "This version is still in development."
 }
 
 import paraview
@@ -17,7 +23,7 @@ class pvNodeTree(bpy.types.NodeTree):
 class pvNodeSocket(bpy.types.NodeSocket):
   bl_label = "VTK Node Socket"
   def draw(self, context, layout, node, x):
-    layout.label(self.name)
+    layout.label(text=self.name)
   def draw_color(self, context, node):
     return (1,1,1,1)
 

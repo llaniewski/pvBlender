@@ -71,7 +71,7 @@ class pvNode(pvDataNode):
     def free(self):
         self.free_data()
     def draw_buttons(self, context, layout):
-        layout.label(type(self).__name__)
+        layout.label(text=type(self).__name__)
         for n in self.propertyNames:
             p = n.s
             if hasattr(self,p):

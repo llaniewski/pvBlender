@@ -3,18 +3,19 @@ import nodeitems_utils
 import paraview
 import paraview.simple
 import paraview.servermanager
+import paraview.modules.vtkPVServerManagerCorePython as vtkPVServerManagerCorePython
 
 from .nodedata import pvDataNode
 from . import category
 
 
 class pvPropName(bpy.types.PropertyGroup):
-    s = bpy.props.StringProperty()
+    s : bpy.props.StringProperty()
     def draw(self, context, layout):
         layout.prop(self, "s")
 
 class pvPropBase(pvDataNode):
-    propertyId = bpy.props.StringProperty(default="")
+    propertyId : bpy.props.StringProperty(default="")
     def update(self,context):
         print(self.propertyId,"updated")
     def load_prop(self):
@@ -22,14 +23,14 @@ class pvPropBase(pvDataNode):
         self.prop = self.data.pv.GetProperty(self.propertyId)
 
 class pvPropString(bpy.types.PropertyGroup,pvPropBase):
-    v = bpy.props.StringProperty()
+    v : bpy.props.StringProperty()
     def read(self):
         self.load_prop()
     def draw(self, layout, p):
         layout.prop(self, "v",text=p)
 
 class pvPropFloat(bpy.types.PropertyGroup,pvPropBase):
-    v = bpy.props.FloatProperty()
+    v : bpy.props.FloatProperty()
     def read(self):
         self.load_prop()
     def draw(self, layout, p):
@@ -51,6 +52,29 @@ def general_get(self,p):
     data = self.get_data()
     return data.pv.GetProperty(p)[0]
 #    return self[p]
+
+
+
+def sm_set(self,p,value):
+    #print("set:", value)
+    n = p.GetNumberOfElements()
+    for i in range(n) :
+        p.SetElement(i, value[i])
+    p.GetParent().UpdateSelfAndAllInputs()
+
+def sm_get(self,p):
+    n = p.GetNumberOfElements()
+    ret = [ p.GetElement(i) for i in range(n) ]
+    #print("get:", ret)
+    return ret
+
+def dbg_set(self,p,value):
+    pass
+
+def dbg_get(self,p):
+    ret = str(p.GetNumberOfElements()) + ":" + str(type(p))
+    return ret
+
 
 def fn_set(self,p,value):
     print("SET filename:",self,p,value)
@@ -76,13 +100,36 @@ def get_prop_domain(prop):
     dom = [ prop.SMProperty.GetDomain(i) for i in s ]
     return (s,dom)
 
+def sm_setter(p):
+    return lambda self,value: sm_set(self,p,value)
+def sm_getter(p):
+    return lambda self: sm_get(self,p)
+
 def create_pv_prop(prop, p):
     sdom,dom = get_prop_domain(prop)
-#    if len(sdom) == 1:
-#        sdom = sdom[0]
-#        if sdom == "bool":
-#            return bpy.props.BoolProperty()
-    return bpy.props.StringProperty(default=str(type(prop.SMProperty))+str(sdom))
+    if type(prop.SMProperty) == vtkPVServerManagerCorePython.vtkSMStringVectorProperty:
+        if len(sdom) == 1:
+            sdom = sdom[0]
+            if sdom == "files":
+                return bpy.props.StringProperty(subtype="FILE_PATH", update=lambda self,context: fn_update(self,context,p))
+        if len(sdom) == 0:
+            return bpy.props.StringProperty(update=lambda self,context: fn_update(self,context,p))
+    if type(prop.SMProperty) == vtkPVServerManagerCorePython.vtkSMDoubleVectorProperty:
+        if prop.SMProperty.GetNumberOfElements() > 0:
+            return bpy.props.FloatVectorProperty(
+                size=prop.SMProperty.GetNumberOfElements(),
+                set=sm_setter(prop.SMProperty),
+                get=sm_getter(prop.SMProperty))
+#        return bpy.props.FloatVectorProperty(size=prop.SMProperty.GetNumberOfElements())
+    if type(prop.SMProperty) == vtkPVServerManagerCorePython.vtkSMIntVectorProperty:
+        if len(sdom) == 1:
+            sdom = sdom[0]
+            if sdom == "bool":
+                return bpy.props.BoolProperty()
+#    return bpy.props.StringProperty(default=str(type(prop.SMProperty))+str(prop.SMProperty.GetNumberOfElements())+str(sdom))
+    return bpy.props.StringProperty(
+        set=lambda self,value: dbg_set(self,prop.SMProperty,value),
+        get=lambda self: dbg_get(self,prop.SMProperty))
     if type(prop) == paraview.servermanager.VectorProperty:
         if len(prop) == 0:
             return bpy.props.FloatProperty(default=0.0)
@@ -108,15 +155,17 @@ def create_pv_prop(prop, p):
 #            get=lambda self: fn_get(self,p))
         return bpy.props.StringProperty(subtype="FILE_PATH",
             update=lambda self,context: fn_update(self,context,p))
+    if type(prop) == paraview.servermanager.ArraySelectionProperty:
+        return bpy.props.StringProperty(default=str(prop.GetData()))
     return bpy.props.StringProperty(default=str(type(prop)))
-#    ret = bpy.props.PointerProperty(type=pvPropString,name=p)
-#    ret = bpy.props.PointerProperty(type=pvPropFloat,name=p)
+#    ret : bpy.props.PointerProperty(type=pvPropString,name=p)
+#    ret : bpy.props.PointerProperty(type=pvPropFloat,name=p)
 #    ret.propertyId = p
 #    return ret
 
 class pvNode(pvDataNode):
     bl_label = "General pv node"
-    propertyNames = bpy.props.CollectionProperty(type=pvPropName)
+    propertyNames : bpy.props.CollectionProperty(type=pvPropName)
     def init(self, context):
         print("Init ",self.bl_label)
         self.load_data()
@@ -126,7 +175,7 @@ class pvNode(pvDataNode):
         self.free_data()
     def draw_buttons(self, context, layout):
         data=self.get_data()
-#        layout.label(data.pv.GetDataInformation().GetDataSetTypeAsString())
+#        layout.label(text=data.pv.GetDataInformation().GetDataSetTypeAsString())
         for n in self.propertyNames:
             p = n.s
             if hasattr(self,p):

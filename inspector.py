@@ -17,16 +17,16 @@ class pvInspector(bpy.types.Node):
         if socket.is_linked and len(socket.links) > 0:
             other = socket.links[0].from_socket
             pv = other.node.get_data().pv
-            layout.label(pv.GetDataInformation().GetDataSetTypeAsString())
-            layout.label("CellData:")
+            layout.label(text=pv.GetDataInformation().GetDataSetTypeAsString())
+            layout.label(text="CellData:")
             for i in pv.CellData:
-                layout.label(str(i) + str(i.GetRange()))
-            layout.label("PointData:")
+                layout.label(text=str(i) + str(i.GetRange()))
+            layout.label(text="PointData:")
             for i in pv.PointData:
-                layout.label(str(i) + str(i.GetRange()))
-            layout.label("FieldData:")
+                layout.label(text=str(i) + str(i.GetRange()))
+            layout.label(text="FieldData:")
             for i in pv.FieldData:
-                layout.label(str(i) + str(i.GetRange()))
+                layout.label(text=str(i) + str(i.GetRange()))
     def update(self):
         pass
             
