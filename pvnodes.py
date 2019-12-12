@@ -56,24 +56,70 @@ def general_get(self,p):
 
 
 def sm_set(self,p,value):
+    p.SetElement(0, value)
+    p.GetParent().UpdateSelfAndAllInputs()
+
+def sm_get(self,p):
+    ret = p.GetElement(0)
+    return ret
+
+def sm_set_v(self,p,value):
     #print("set:", value)
     n = p.GetNumberOfElements()
     for i in range(n) :
         p.SetElement(i, value[i])
     p.GetParent().UpdateSelfAndAllInputs()
 
-def sm_get(self,p):
+def sm_get_v(self,p):
     n = p.GetNumberOfElements()
     ret = [ p.GetElement(i) for i in range(n) ]
     #print("get:", ret)
     return ret
 
+def sm_describe(prop):
+    [sdom, dom] = get_prop_domain(prop)
+    ret=""
+    if "GetNumberOfElements" in dir(prop):
+        ret = ret + str(prop.GetNumberOfElements()) + ":"
+    ret = ret + str(type(prop)) + str(sdom)
+    return ret
+
+def sm_set4(self,p,value):
+    print("set:" + str(value))
+    [sdom, dom] = get_prop_domain(p)
+    d = dom[0]
+    n = d.GetNumberOfStrings()
+    ret = [ d.GetString(i) for i in range(n) ]
+    if value > 0:
+        s = ret[value-1]
+        p.SetElement(4, s)
+    else:
+        p.SetElement(4, None)
+    p.GetParent().UpdateSelfAndAllInputs()
+
+def sm_get4(self,p):
+    [sdom, dom] = get_prop_domain(p)
+    d = dom[0]
+    n = d.GetNumberOfStrings()
+    ret = [ d.GetString(i) for i in range(n) ]
+    val = p.GetElement(4)
+    try:
+        i = ret.index(val)+1
+    except ValueError:
+        i = 0
+    print("get:" + str(i))
+    return i
+
+def sm_get_items(d):
+    n = d.GetNumberOfStrings()
+    ret = [ (d.GetString(i),d.GetString(i),"desc",i+1) for i in range(n) ]
+    return ret
+
 def dbg_set(self,p,value):
     pass
 
-def dbg_get(self,p):
-    ret = str(p.GetNumberOfElements()) + ":" + str(type(p))
-    return ret
+def dbg_get(self,prop):
+    return sm_describe(prop)
 
 
 def fn_set(self,p,value):
@@ -91,77 +137,77 @@ def fn_update(self,context,p):
     print("Update filename:",self,p,value);
     self.data.pv.SetPropertyWithName(p,bpy.path.abspath(value))
 
+
 def get_prop_domain(prop):
-    i = prop.SMProperty.NewDomainIterator()
+    i = prop.NewDomainIterator()
     s = []
     while i.GetKey() is not None:
         s.append(i.GetKey())
         i.Next()
-    dom = [ prop.SMProperty.GetDomain(i) for i in s ]
+    dom = [ prop.GetDomain(i) for i in s ]
     return (s,dom)
 
-def sm_setter(p):
-    return lambda self,value: sm_set(self,p,value)
-def sm_getter(p):
-    return lambda self: sm_get(self,p)
-
-def create_pv_prop(prop, p):
+def create_pv_prop(prop_, p):
+    prop=prop_.SMProperty
     sdom,dom = get_prop_domain(prop)
-    if type(prop.SMProperty) == vtkPVServerManagerCorePython.vtkSMStringVectorProperty:
+    if type(prop) == vtkPVServerManagerCorePython.vtkSMStringVectorProperty:
         if len(sdom) == 1:
             sdom = sdom[0]
             if sdom == "files":
                 return bpy.props.StringProperty(subtype="FILE_PATH", update=lambda self,context: fn_update(self,context,p))
+            if sdom == "array_list":
+                return bpy.props.EnumProperty(
+                    items=lambda self, context: sm_get_items(dom[0]),
+                    set=lambda self,value: sm_set4(self,prop,value),
+                    get=lambda self: sm_get4(self,prop))
         if len(sdom) == 0:
-            return bpy.props.StringProperty(update=lambda self,context: fn_update(self,context,p))
-    if type(prop.SMProperty) == vtkPVServerManagerCorePython.vtkSMDoubleVectorProperty:
-        if prop.SMProperty.GetNumberOfElements() > 0:
+            if prop.GetNumberOfElements() == 1:
+                return bpy.props.StringProperty(
+                    description=sm_describe(prop),
+                    set=lambda self,value: sm_set(self,prop,value),
+                    get=lambda self: sm_get(self,prop))
+    if type(prop) == vtkPVServerManagerCorePython.vtkSMDoubleVectorProperty:
+        if prop.GetNumberOfElements() > 1:
             return bpy.props.FloatVectorProperty(
-                size=prop.SMProperty.GetNumberOfElements(),
-                set=sm_setter(prop.SMProperty),
-                get=sm_getter(prop.SMProperty))
-#        return bpy.props.FloatVectorProperty(size=prop.SMProperty.GetNumberOfElements())
-    if type(prop.SMProperty) == vtkPVServerManagerCorePython.vtkSMIntVectorProperty:
+                size=prop.GetNumberOfElements(),
+                description=sm_describe(prop),
+                set=lambda self,value: sm_set_v(self,prop,value),
+                get=lambda self: sm_get_v(self,prop))
+        elif prop.GetNumberOfElements() == 1:
+            return bpy.props.FloatProperty(
+                description=sm_describe(prop),
+                set=lambda self,value: sm_set(self,prop,value),
+                get=lambda self: sm_get(self,prop))
+    if type(prop) == vtkPVServerManagerCorePython.vtkSMIntVectorProperty:
         if len(sdom) == 1:
             sdom = sdom[0]
             if sdom == "bool":
-                return bpy.props.BoolProperty()
-#    return bpy.props.StringProperty(default=str(type(prop.SMProperty))+str(prop.SMProperty.GetNumberOfElements())+str(sdom))
+                if prop.GetNumberOfElements() > 1:
+                    return bpy.props.BoolVectorProperty(
+                        size=prop.GetNumberOfElements(),
+                        description=sm_describe(prop),
+                        set=lambda self,value: sm_set(self,prop,value),
+                        get=lambda self: sm_get(self,prop))
+                if prop.GetNumberOfElements() == 1:
+                    return bpy.props.BoolProperty(
+                        description=sm_describe(prop),
+                        set=lambda self,value: sm_set(self,prop,value),
+                        get=lambda self: sm_get(self,prop))
+            if prop.GetNumberOfElements() > 1:
+                return bpy.props.IntVectorProperty(
+                    size=prop.GetNumberOfElements(),
+                    description=sm_describe(prop),
+                    set=lambda self,value: sm_set_v(self,prop,value),
+                    get=lambda self: sm_get_v(self,prop))
+            if prop.GetNumberOfElements() == 1:
+                return bpy.props.IntProperty(
+                    description=sm_describe(prop),
+                    set=lambda self,value: sm_set(self,prop,value),
+                    get=lambda self: sm_get(self,prop))
     return bpy.props.StringProperty(
-        set=lambda self,value: dbg_set(self,prop.SMProperty,value),
-        get=lambda self: dbg_get(self,prop.SMProperty))
-    if type(prop) == paraview.servermanager.VectorProperty:
-        if len(prop) == 0:
-            return bpy.props.FloatProperty(default=0.0)
-        if type(prop[0]) == float:
-            if len(prop) == 1:
-                return bpy.props.FloatProperty(default=prop[0],
-                    set=lambda self,value: general_set(self,p,value),
-                    get=lambda self: general_get(self,p))
-            if len(prop) == 3:
-                return bpy.props.FloatVectorProperty(subtype="TRANSLATION",default=[1,0,0])
-            return bpy.props.FloatVectorProperty(size=len(prop))
-        if type(prop[0]) == bool:
-            if len(prop) == 1:
-                return bpy.props.BoolProperty(default=prop[0])
-            return bpy.props.BoolVectorProperty(size=len(prop))
-        if type(prop[0]) == int:
-            if len(prop) == 1:
-                return bpy.props.IntProperty(default=prop[0])
-            return bpy.props.IntVectorProperty(size=len(prop))
-    if type(prop) == paraview.servermanager.FileNameProperty:
-#        return bpy.props.StringProperty(subtype="FILE_PATH",
-#            set=lambda self,value: fn_set(self,p,value),
-#            get=lambda self: fn_get(self,p))
-        return bpy.props.StringProperty(subtype="FILE_PATH",
-            update=lambda self,context: fn_update(self,context,p))
-    if type(prop) == paraview.servermanager.ArraySelectionProperty:
-        return bpy.props.StringProperty(default=str(prop.GetData()))
-    return bpy.props.StringProperty(default=str(type(prop)))
-#    ret : bpy.props.PointerProperty(type=pvPropString,name=p)
-#    ret : bpy.props.PointerProperty(type=pvPropFloat,name=p)
-#    ret.propertyId = p
-#    return ret
+        description=sm_describe(prop),
+        set=lambda self,value: dbg_set(self,prop,value),
+        get=lambda self: dbg_get(self,prop))
 
 class pvNode(pvDataNode):
     bl_label = "General pv node"
