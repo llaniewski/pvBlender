@@ -11,6 +11,7 @@ from . import category
 
 class pvPropName(bpy.types.PropertyGroup):
     s : bpy.props.StringProperty()
+    l : bpy.props.StringProperty()
     def draw(self, context, layout):
         layout.prop(self, "s")
 
@@ -36,7 +37,6 @@ class pvPropFloat(bpy.types.PropertyGroup,pvPropBase):
     def draw(self, layout, p):
         layout.prop(self, "v",text=p)
 
-
 def general_update(self,context):
     print(self)
     print(context)
@@ -60,6 +60,7 @@ def sm_set(self,p,value):
     p.GetParent().UpdateSelfAndAllInputs()
 
 def sm_get(self,p):
+#    print("get self:", str(type(self)))
     ret = p.GetElement(0)
     return ret
 
@@ -70,10 +71,12 @@ def sm_set_v(self,p,value):
         p.SetElement(i, value[i])
     p.GetParent().UpdateSelfAndAllInputs()
 
-def sm_get_v(self,p):
+def sm_get_elements(p):
     n = p.GetNumberOfElements()
-    ret = [ p.GetElement(i) for i in range(n) ]
-    #print("get:", ret)
+    return [ p.GetElement(i) for i in range(n) ]
+
+def sm_get_v(self,p):
+    ret = sm_get_elements(p)
     return ret
 
 def sm_describe(prop):
@@ -81,15 +84,12 @@ def sm_describe(prop):
     ret=""
     if "GetNumberOfElements" in dir(prop):
         ret = ret + str(prop.GetNumberOfElements()) + ":"
-    ret = ret + str(type(prop)) + str(sdom)
+    ret = ret + str(type(prop)) + str([str(type(d)) for d in dom])
     return ret
 
-def sm_set4(self,p,value):
-    print("set:" + str(value))
-    [sdom, dom] = get_prop_domain(p)
-    d = dom[0]
-    n = d.GetNumberOfStrings()
-    ret = [ d.GetString(i) for i in range(n) ]
+def sm_set_arraylist(self,p,d,value):
+    #print("set:" + str(value))
+    ret = sm_get_strings(d)
     if value > 0:
         s = ret[value-1]
         p.SetElement(4, s)
@@ -97,23 +97,61 @@ def sm_set4(self,p,value):
         p.SetElement(4, None)
     p.GetParent().UpdateSelfAndAllInputs()
 
-def sm_get4(self,p):
-    [sdom, dom] = get_prop_domain(p)
-    d = dom[0]
-    n = d.GetNumberOfStrings()
-    ret = [ d.GetString(i) for i in range(n) ]
+def sm_get_arraylist(self,p,d):
+    ret = sm_get_strings(d)
     val = p.GetElement(4)
     try:
         i = ret.index(val)+1
     except ValueError:
         i = 0
-    print("get:" + str(i))
+#    print("get:" + str(i))
     return i
+
+
+def sm_set_arrayselection(self,p,d,value):
+#    print("set:" + str(value))
+    s = sm_get_strings(d)
+    bits = [ s[i] for i in range(len(s)) if value & (1<<i) != 0 ]
+#    print("set:" + str(bits))
+    n = p.GetNumberOfElements()
+    for i in range(0,n,2) :
+        if p.GetElement(i) in bits:
+            p.SetElement(i+1, '1')
+        else:
+            p.SetElement(i+1, '0')
+    p.GetParent().UpdateSelfAndAllInputs()
+
+
+
+def sm_arrayselection_checked(e,v):
+    try:
+        i = e.index(v)
+        return e[i+1] == '1'
+    except ValueError:
+        return False
+
+def sm_get_arrayselection(self,p,d):
+    s = sm_get_strings(d)
+    e = sm_get_elements(p)
+    bits = [sm_arrayselection_checked(e,i) for i in s]
+    out = 0
+    for k in range(len(bits)):
+        if bits[k]:
+            out = out + (1<<k)
+#    print("get:" + str(out))
+    return out
+
+def sm_get_strings(d):
+    n = d.GetNumberOfStrings()
+    ret = [ d.GetString(i) for i in range(n) ]
+    return ret
 
 def sm_get_items(d):
     n = d.GetNumberOfStrings()
     ret = [ (d.GetString(i),d.GetString(i),"desc",i+1) for i in range(n) ]
+#    print("items:"+str(ret))
     return ret
+
 
 def dbg_set(self,p,value):
     pass
@@ -147,67 +185,97 @@ def get_prop_domain(prop):
     dom = [ prop.GetDomain(i) for i in s ]
     return (s,dom)
 
+class ArraySelectionElement(bpy.types.PropertyGroup):
+    name : bpy.props.BoolProperty(name="selected")
+
+
+def test_set(self,value):
+    print("set self:" + str(type(self)))
+def test_get(self):
+#    print("get self:" +str(type(self)))
+    return 0
+
+class DoubleArrayElement(bpy.types.PropertyGroup):
+    val : bpy.props.FloatProperty(set=test_set, get=test_get )
+
+class AddButtonOperator(bpy.types.Operator):
+    bl_idname = "pvblender.my_add_button_operator"
+    bl_label = "Add Button"
+    n :bpy.props.StringProperty()
+    def execute(self, context):
+        print("button self:" + str(type(self)) + str(self.n))
+        return {'FINISHED'}
+
 def create_pv_prop(prop_, p):
     prop=prop_.SMProperty
     sdom,dom = get_prop_domain(prop)
     if type(prop) == vtkPVServerManagerCorePython.vtkSMStringVectorProperty:
         if len(sdom) == 1:
-            sdom = sdom[0]
-            if sdom == "files":
-                return bpy.props.StringProperty(subtype="FILE_PATH", update=lambda self,context: fn_update(self,context,p))
-            if sdom == "array_list":
-                return bpy.props.EnumProperty(
+            if sdom[0] == "files":
+                return ('standard', bpy.props.StringProperty(subtype="FILE_PATH", update=lambda self,context: fn_update(self,context,p)))
+            if type(dom[0]) == vtkPVServerManagerCorePython.vtkSMArrayListDomain:
+                return ('standard', bpy.props.EnumProperty(
                     items=lambda self, context: sm_get_items(dom[0]),
-                    set=lambda self,value: sm_set4(self,prop,value),
-                    get=lambda self: sm_get4(self,prop))
+                    set=lambda self,value: sm_set_arraylist(self,prop,dom[0],value),
+                    get=lambda self: sm_get_arraylist(self,prop,dom[0])))
+            if type(dom[0]) == vtkPVServerManagerCorePython.vtkSMArraySelectionDomain:
+#                return bpy.props.EnumProperty(
+#                    options={'ENUM_FLAG'},
+#                    items=lambda self, context: sm_get_items(dom[0]),
+#                    set=lambda self,value: sm_set_arrayselection(self,prop,dom[0],value),
+#                    get=lambda self: sm_get_arrayselection(self,prop,dom[0]))
+                return ('standard', bpy.props.CollectionProperty(type=ArraySelectionElement))
         if len(sdom) == 0:
             if prop.GetNumberOfElements() == 1:
-                return bpy.props.StringProperty(
+                return ('standard', bpy.props.StringProperty(
                     description=sm_describe(prop),
                     set=lambda self,value: sm_set(self,prop,value),
-                    get=lambda self: sm_get(self,prop))
+                    get=lambda self: sm_get(self,prop)))
     if type(prop) == vtkPVServerManagerCorePython.vtkSMDoubleVectorProperty:
+        if len(sdom) == 1:
+            if type(dom[0]) == vtkPVServerManagerCorePython.vtkSMArrayRangeDomain:
+                return ('DoubleArray', bpy.props.CollectionProperty(type=DoubleArrayElement))
         if prop.GetNumberOfElements() > 1:
-            return bpy.props.FloatVectorProperty(
+            return ('standard', bpy.props.FloatVectorProperty(
                 size=prop.GetNumberOfElements(),
                 description=sm_describe(prop),
                 set=lambda self,value: sm_set_v(self,prop,value),
-                get=lambda self: sm_get_v(self,prop))
+                get=lambda self: sm_get_v(self,prop)))
         elif prop.GetNumberOfElements() == 1:
-            return bpy.props.FloatProperty(
+            return ('standard', bpy.props.FloatProperty(
                 description=sm_describe(prop),
                 set=lambda self,value: sm_set(self,prop,value),
-                get=lambda self: sm_get(self,prop))
+                get=lambda self: sm_get(self,prop)))
     if type(prop) == vtkPVServerManagerCorePython.vtkSMIntVectorProperty:
         if len(sdom) == 1:
             sdom = sdom[0]
             if sdom == "bool":
                 if prop.GetNumberOfElements() > 1:
-                    return bpy.props.BoolVectorProperty(
+                    return ('standard', bpy.props.BoolVectorProperty(
                         size=prop.GetNumberOfElements(),
                         description=sm_describe(prop),
                         set=lambda self,value: sm_set(self,prop,value),
-                        get=lambda self: sm_get(self,prop))
+                        get=lambda self: sm_get(self,prop)))
                 if prop.GetNumberOfElements() == 1:
-                    return bpy.props.BoolProperty(
+                    return ('standard', bpy.props.BoolProperty(
                         description=sm_describe(prop),
                         set=lambda self,value: sm_set(self,prop,value),
-                        get=lambda self: sm_get(self,prop))
+                        get=lambda self: sm_get(self,prop)))
             if prop.GetNumberOfElements() > 1:
-                return bpy.props.IntVectorProperty(
+                return ('standard', bpy.props.IntVectorProperty(
                     size=prop.GetNumberOfElements(),
                     description=sm_describe(prop),
                     set=lambda self,value: sm_set_v(self,prop,value),
-                    get=lambda self: sm_get_v(self,prop))
+                    get=lambda self: sm_get_v(self,prop)))
             if prop.GetNumberOfElements() == 1:
-                return bpy.props.IntProperty(
+                return ('standard', bpy.props.IntProperty(
                     description=sm_describe(prop),
                     set=lambda self,value: sm_set(self,prop,value),
-                    get=lambda self: sm_get(self,prop))
-    return bpy.props.StringProperty(
+                    get=lambda self: sm_get(self,prop)))
+    return ('standard', bpy.props.StringProperty(
         description=sm_describe(prop),
         set=lambda self,value: dbg_set(self,prop,value),
-        get=lambda self: dbg_get(self,prop))
+        get=lambda self: dbg_get(self,prop)))
 
 class pvNode(pvDataNode):
     bl_label = "General pv node"
@@ -224,12 +292,19 @@ class pvNode(pvDataNode):
 #        layout.label(text=data.pv.GetDataInformation().GetDataSetTypeAsString())
         for n in self.propertyNames:
             p = n.s
+            lay = n.l
             if hasattr(self,p):
                 pr = getattr(self,p)
                 if isinstance(pr,pvPropBase):
                     pr.draw(layout,p)
                 else:
-                    layout.prop(self,p)
+                    if lay == "DoubleArray":
+                        for k in pr:
+                            layout.prop(k,'val',expand=True, toggle=True)
+                        ret = layout.operator("pvblender.my_add_button_operator")
+                        ret.n = "aa"
+                    else:
+                        layout.prop(self,p,expand=True, toggle=True)
     def init_data(self):
         paraview.simple.SetActiveSource(None)
         self.data.pv = getattr(sys.modules["paraview.simple"],self.pvType)()
@@ -247,10 +322,12 @@ class pvNode(pvDataNode):
             if type(prop) == paraview.servermanager.InputProperty:
                 ip.add(p)
             else:
-                setattr(type(self),p,create_pv_prop(prop,p))    
+                (lay, bpy_prop) = create_pv_prop(prop,p)
+                setattr(type(self),p,bpy_prop)
                 if p not in ap:
                     it = self.propertyNames.add()
                     it.s = p
+                    it.l = lay
         # Adding inputs later, because it triggers update
         if len(ip) > 0:
             print("Adding to",self.bl_label,"inputs:",ip)
@@ -285,7 +362,9 @@ def register():
     bpy.utils.register_class(pvPropName)
     bpy.utils.register_class(pvPropString)
     bpy.utils.register_class(pvPropFloat)
-
+    bpy.utils.register_class(ArraySelectionElement)
+    bpy.utils.register_class(DoubleArrayElement)
+    bpy.utils.register_class(AddButtonOperator)
     def pvClasses(mod):
         mylist = [i for i in dir(mod) if i[0] != "_"]
         return [ pvClass(k) for k in mylist ]
