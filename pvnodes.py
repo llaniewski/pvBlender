@@ -4,7 +4,7 @@ import paraview
 import paraview.simple
 import paraview.servermanager
 import paraview.modules.vtkPVServerManagerCorePython as vtkPVServerManagerCorePython
-
+import uuid
 from .nodedata import pvDataNode
 from . import category
 
@@ -12,6 +12,7 @@ from . import category
 class pvPropName(bpy.types.PropertyGroup):
     s : bpy.props.StringProperty()
     l : bpy.props.StringProperty()
+    i : bpy.props.StringProperty()
     def draw(self, context, layout):
         layout.prop(self, "s")
 
@@ -190,10 +191,11 @@ class ArraySelectionElement(bpy.types.PropertyGroup):
 
 
 def test_set(self,value):
-    print("set self:" + str(type(self)))
+    print("set(" + str(type(self)) + ") = " + str(value))
+    #self["pv_a"] = value
 def test_get(self):
 #    print("get self:" +str(type(self)))
-    return 0
+    return 0#self["pv_a"]
 
 class DoubleArrayElement(bpy.types.PropertyGroup):
     val : bpy.props.FloatProperty(set=test_set, get=test_get )
@@ -201,20 +203,27 @@ class DoubleArrayElement(bpy.types.PropertyGroup):
 class AddButtonOperator(bpy.types.Operator):
     bl_idname = "pvblender.my_add_button_operator"
     bl_label = "Add Button"
-    n :bpy.props.StringProperty()
+    i :bpy.props.StringProperty()
     def execute(self, context):
-        print("button self:" + str(type(self)) + str(self.n))
+        pr = getattr(context.scene, self.i)
+        pr.add()
         return {'FINISHED'}
 
 def create_pv_prop(prop_, p):
     prop=prop_.SMProperty
     sdom,dom = get_prop_domain(prop)
+    desc=sm_describe(prop)
+    nm=p
     if type(prop) == vtkPVServerManagerCorePython.vtkSMStringVectorProperty:
         if len(sdom) == 1:
             if sdom[0] == "files":
-                return ('standard', bpy.props.StringProperty(subtype="FILE_PATH", update=lambda self,context: fn_update(self,context,p)))
+                return ('standard', bpy.props.StringProperty(
+                    description=desc,name=nm,
+                    subtype="FILE_PATH",
+                    update=lambda self,context: fn_update(self,context,p)))
             if type(dom[0]) == vtkPVServerManagerCorePython.vtkSMArrayListDomain:
                 return ('standard', bpy.props.EnumProperty(
+                    description=desc,name=nm,
                     items=lambda self, context: sm_get_items(dom[0]),
                     set=lambda self,value: sm_set_arraylist(self,prop,dom[0],value),
                     get=lambda self: sm_get_arraylist(self,prop,dom[0])))
@@ -224,26 +233,30 @@ def create_pv_prop(prop_, p):
 #                    items=lambda self, context: sm_get_items(dom[0]),
 #                    set=lambda self,value: sm_set_arrayselection(self,prop,dom[0],value),
 #                    get=lambda self: sm_get_arrayselection(self,prop,dom[0]))
-                return ('standard', bpy.props.CollectionProperty(type=ArraySelectionElement))
+                return ('standard', bpy.props.CollectionProperty(
+                    description=desc,name=nm,
+                    type=ArraySelectionElement))
         if len(sdom) == 0:
             if prop.GetNumberOfElements() == 1:
                 return ('standard', bpy.props.StringProperty(
-                    description=sm_describe(prop),
+                    description=desc,name=nm,
                     set=lambda self,value: sm_set(self,prop,value),
                     get=lambda self: sm_get(self,prop)))
     if type(prop) == vtkPVServerManagerCorePython.vtkSMDoubleVectorProperty:
         if len(sdom) == 1:
             if type(dom[0]) == vtkPVServerManagerCorePython.vtkSMArrayRangeDomain:
-                return ('DoubleArray', bpy.props.CollectionProperty(type=DoubleArrayElement))
+                return ('DoubleArray', bpy.props.CollectionProperty(
+                    description=desc,name=nm,
+                    type=DoubleArrayElement))
         if prop.GetNumberOfElements() > 1:
             return ('standard', bpy.props.FloatVectorProperty(
                 size=prop.GetNumberOfElements(),
-                description=sm_describe(prop),
+                description=desc,name=nm,
                 set=lambda self,value: sm_set_v(self,prop,value),
                 get=lambda self: sm_get_v(self,prop)))
         elif prop.GetNumberOfElements() == 1:
             return ('standard', bpy.props.FloatProperty(
-                description=sm_describe(prop),
+                description=desc,name=nm,
                 set=lambda self,value: sm_set(self,prop,value),
                 get=lambda self: sm_get(self,prop)))
     if type(prop) == vtkPVServerManagerCorePython.vtkSMIntVectorProperty:
@@ -253,27 +266,27 @@ def create_pv_prop(prop_, p):
                 if prop.GetNumberOfElements() > 1:
                     return ('standard', bpy.props.BoolVectorProperty(
                         size=prop.GetNumberOfElements(),
-                        description=sm_describe(prop),
+                        description=desc,name=nm,
                         set=lambda self,value: sm_set(self,prop,value),
                         get=lambda self: sm_get(self,prop)))
                 if prop.GetNumberOfElements() == 1:
                     return ('standard', bpy.props.BoolProperty(
-                        description=sm_describe(prop),
+                        description=desc,name=nm,
                         set=lambda self,value: sm_set(self,prop,value),
                         get=lambda self: sm_get(self,prop)))
             if prop.GetNumberOfElements() > 1:
                 return ('standard', bpy.props.IntVectorProperty(
                     size=prop.GetNumberOfElements(),
-                    description=sm_describe(prop),
+                    description=desc,name=nm,
                     set=lambda self,value: sm_set_v(self,prop,value),
                     get=lambda self: sm_get_v(self,prop)))
             if prop.GetNumberOfElements() == 1:
                 return ('standard', bpy.props.IntProperty(
-                    description=sm_describe(prop),
+                    description=desc,name=nm,
                     set=lambda self,value: sm_set(self,prop,value),
                     get=lambda self: sm_get(self,prop)))
     return ('standard', bpy.props.StringProperty(
-        description=sm_describe(prop),
+        description=desc,name=nm,
         set=lambda self,value: dbg_set(self,prop,value),
         get=lambda self: dbg_get(self,prop)))
 
@@ -292,19 +305,21 @@ class pvNode(pvDataNode):
 #        layout.label(text=data.pv.GetDataInformation().GetDataSetTypeAsString())
         for n in self.propertyNames:
             p = n.s
+            i = n.i
             lay = n.l
-            if hasattr(self,p):
-                pr = getattr(self,p)
+            if hasattr(context.scene, i):
+                pr = getattr(context.scene, i)
                 if isinstance(pr,pvPropBase):
                     pr.draw(layout,p)
                 else:
                     if lay == "DoubleArray":
+                        layout.label(text = p + ":")
                         for k in pr:
-                            layout.prop(k,'val',expand=True, toggle=True)
+                            layout.prop(k,'val',text='')
                         ret = layout.operator("pvblender.my_add_button_operator")
-                        ret.n = "aa"
+                        ret.i = i
                     else:
-                        layout.prop(self,p,expand=True, toggle=True)
+                        layout.prop(context.scene, i)
     def init_data(self):
         paraview.simple.SetActiveSource(None)
         self.data.pv = getattr(sys.modules["paraview.simple"],self.pvType)()
@@ -322,10 +337,13 @@ class pvNode(pvDataNode):
             if type(prop) == paraview.servermanager.InputProperty:
                 ip.add(p)
             else:
+                i = str(uuid.uuid1()) + "-" + p
                 (lay, bpy_prop) = create_pv_prop(prop,p)
-                setattr(type(self),p,bpy_prop)
+#                setattr(type(self),p,bpy_prop)
+                setattr(bpy.types.Scene,i,bpy_prop)
                 if p not in ap:
                     it = self.propertyNames.add()
+                    it.i = i
                     it.s = p
                     it.l = lay
         # Adding inputs later, because it triggers update
@@ -368,7 +386,6 @@ def register():
     def pvClasses(mod):
         mylist = [i for i in dir(mod) if i[0] != "_"]
         return [ pvClass(k) for k in mylist ]
-
     def pvClass(k):
         c = "pvSimple" + k
         if c not in my_pvClasses:
