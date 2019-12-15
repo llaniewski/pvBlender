@@ -42,7 +42,7 @@ class pvObjectNode(bpy.types.Node):
 import bmesh
 
 class pvBMeshNode(bpy.types.Node):
-    bl_label = "Blender Object"
+    bl_label = "Mesh Output"
     mshName = bpy.props.StringProperty(default="")
     def init(self, context):
         print("Init node: ", self.name)
