@@ -22,7 +22,7 @@ class pvPropBase(pvDataNode):
         print(self.propertyId,"updated")
     def load_prop(self):
         self.load_data()
-        self.prop = self.data.pv.GetProperty(self.propertyId)
+        self.prop = self.pv().GetProperty(self.propertyId)
 
 class pvPropString(bpy.types.PropertyGroup,pvPropBase):
     v : bpy.props.StringProperty()
@@ -44,14 +44,12 @@ def general_update(self,context):
 
 def general_set(self,p,value):
     print("SET:",self,p,value)
-    data = self.get_data()
-    data.pv.SetPropertyWithName(p,value)
+    self.pv().SetPropertyWithName(p,value)
     self[p] = value
 
 def general_get(self,p):
 #    print("GET:",self,p,self[p])
-    data = self.get_data()
-    return data.pv.GetProperty(p)[0]
+    return self.pv().GetProperty(p)[0]
 #    return self[p]
 
 
@@ -163,18 +161,16 @@ def dbg_get(self,prop):
 
 def fn_set(self,p,value):
     print("SET filename:",self,p,value)
-    data = self.get_data()
-    data.pv.SetPropertyWithName(p,bpy.path.abspath(value))
+    self.pv().SetPropertyWithName(p,bpy.path.abspath(value))
 
 def fn_get(self,p):
-    data = self.get_data()
-    return str(data.pv.GetProperty(p)[0])
+    return str(self.pv().GetProperty(p)[0])
 
 def fn_update(self,context,p):
     self.load_data()
     value = getattr(self,p)
     print("Update filename:",self,p,value);
-    self.data.pv.SetPropertyWithName(p,bpy.path.abspath(value))
+    self.pv().SetPropertyWithName(p,bpy.path.abspath(value))
 
 
 def get_prop_domain(prop):
@@ -290,19 +286,21 @@ def create_pv_prop(prop_, p):
         set=lambda self,value: dbg_set(self,prop,value),
         get=lambda self: dbg_get(self,prop)))
 
-class pvNode(pvDataNode):
+class pvNode:
     bl_label = "General pv node"
+    proxyName : bpy.props.StringProperty()
     propertyNames : bpy.props.CollectionProperty(type=pvPropName)
     def init(self, context):
         print("Init ",self.bl_label)
-        self.load_data()
+        self.init_data()
         self.pv_props()
         self.outputs.new("pvNodeSocket", "Output")
     def free(self):
         self.free_data()
     def draw_buttons(self, context, layout):
-        data=self.get_data()
-#        layout.label(text=data.pv.GetDataInformation().GetDataSetTypeAsString())
+        #self.load_data()
+#        data=self.get_data()
+#        layout.label(text=self.pv().GetDataInformation().GetDataSetTypeAsString())
         for n in self.propertyNames:
             p = n.s
             i = n.i
@@ -322,9 +320,13 @@ class pvNode(pvDataNode):
                         layout.prop(context.scene, i)
     def init_data(self):
         paraview.simple.SetActiveSource(None)
-        self.data.pv = getattr(sys.modules["paraview.simple"],self.pvType)()
+        obj = getattr(sys.modules["paraview.simple"],self.pvType)()
+        self.proxyName = obj.SMProxy.GetLogName()
+    def pv(self):
+        print("pv():" + self.proxyName)
+        return paraview.simple.FindSource(self.proxyName)
     def pv_props(self):
-        op = {str(n) for n in self.data.pv.ListProperties()}
+        op = {str(n) for n in self.pv().ListProperties()}
         ap = {str(n.s) for n in self.propertyNames}
         mp = {p for p in ap if hasattr(type(self),p)}
         sp = {p.name for p in self.inputs}
@@ -333,7 +335,7 @@ class pvNode(pvDataNode):
         if len(pp) > 0:
             print("Adding to",self.bl_label,"properties:",pp)
         for p in pp:
-            prop = self.data.pv.GetProperty(p)
+            prop = self.pv().GetProperty(p)
             if type(prop) == paraview.servermanager.InputProperty:
                 ip.add(p)
             else:
@@ -353,15 +355,14 @@ class pvNode(pvDataNode):
             self.inputs.new("pvNodeSocket", i)
     def update(self):
         print("Update ",self.bl_label)
-        self.load_data()
         self.pv_props()
-        pv1 = self.data.pv
+        pv1 = self.pv()
         for socket in self.inputs:
             if socket.is_linked and len(socket.links) > 0:
                 print("----------- Socket",socket.name,"connected!")
                 other = socket.links[0].from_socket.node
                 other.load_data()
-                pv2 = other.data.pv
+                pv2 = other.self.pv
                 pv1.SetPropertyWithName(socket.name, pv2)
             else:
                 print("----------- Socket",socket.name,"connected!")
