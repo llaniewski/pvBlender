@@ -16,7 +16,7 @@ class pvInspector(bpy.types.Node):
         socket = self.inputs["Input"]
         if socket.is_linked and len(socket.links) > 0:
             other = socket.links[0].from_socket
-            pv = other.node.get_data().pv
+            pv = other.node.pv()
             layout.label(text=pv.GetDataInformation().GetDataSetTypeAsString())
             layout.label(text="CellData:")
             for i in pv.CellData:
