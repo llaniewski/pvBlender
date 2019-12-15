@@ -62,8 +62,8 @@ def sm_set_arraylist(self,proxyName,propName,value):
     dom = get_prop_domains(prop)
     ret = sm_get_strings(dom[0])
     print("set:" + str(value))
-    if value > 0:
-        s = ret[value-1]
+    if value < len(ret):
+        s = ret[value]
         prop.SetElement(4, s)
     else:
         prop.SetElement(4, None)
@@ -75,9 +75,9 @@ def sm_get_arraylist(self,proxyName,propName):
     ret = sm_get_strings(dom[0])
     val = prop.GetElement(4)
     try:
-        i = ret.index(val)+1
+        i = ret.index(val)
     except ValueError:
-        i = 0
+        i = -1
     return i
 
 def sm_get_strings(d):
@@ -109,14 +109,20 @@ class ArraySelectionElement(bpy.types.PropertyGroup):
 
 
 def test_set(self,value):
-    print("set(" + str(type(self)) + ") = " + str(value))
-    #self["pv_a"] = value
+    prop = sm_prop(self.proxyName,self.propName)
+    if (self.index >= prop.GetNumberOfElements()):
+        prop.SetNumberOfElements(self.index+1)
+    prop.SetElement(self.index, value)
 def test_get(self):
-#    print("get self:" +str(type(self)))
-    return 0#self["pv_a"]
+    prop = sm_prop(self.proxyName,self.propName)
+    return prop.GetElement(self.index)
+
 
 class DoubleArrayElement(bpy.types.PropertyGroup):
-    val : bpy.props.FloatProperty(set=test_set, get=test_get )
+    value : bpy.props.FloatProperty(set=test_set, get=test_get )
+    proxyName : bpy.props.StringProperty()
+    propName  : bpy.props.StringProperty()
+    index : bpy.props.IntProperty()
 
 class AddButtonOperator(bpy.types.Operator):
     bl_idname = "pvblender.my_add_button_operator"
@@ -126,7 +132,11 @@ class AddButtonOperator(bpy.types.Operator):
     sceneProp : bpy.props.StringProperty()
     def execute(self, context):
         pr = getattr(context.scene, self.sceneProp)
-        pr.add()
+        ret = pr.add()
+        ret.propName = self.propName
+        ret.proxyName = self.proxyName
+        ret.index = len(pr)-1
+        test_set(ret, 0)
         return {'FINISHED'}
 
 def create_pv_prop(proxyName, propName):
@@ -227,7 +237,7 @@ class pvNode:
                 if n.layoutType == "DoubleArray":
                     layout.label(text = n.propName + ":")
                     for k in pr:
-                        layout.prop(k,'val',text='')
+                        layout.prop(k,'value',text='')
                     ret = layout.operator("pvblender.my_add_button_operator")
                     ret.sceneProp = n.sceneProp
                     ret.propName = n.propName
