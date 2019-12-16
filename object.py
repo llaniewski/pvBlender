@@ -13,7 +13,7 @@ import vtkCommonDataModelPython
 
 class pvObjectNode(bpy.types.Node):
     bl_label = "Blender Legacy Mesh"
-    obName = bpy.props.StringProperty(default="VTKObj")
+    obName : bpy.props.StringProperty(default="VTKObj")
     def init(self, context):
         print("Init node: ", self.name)
         self.inputs.new("pvNodeSocket", "Input")
@@ -43,7 +43,7 @@ import bmesh
 
 class pvBMeshNode(bpy.types.Node):
     bl_label = "Mesh Output"
-    mshName = bpy.props.StringProperty(default="")
+    mshName : bpy.props.StringProperty(default="")
     def init(self, context):
         print("Init node: ", self.name)
         self.inputs.new("pvNodeSocket", "Input")

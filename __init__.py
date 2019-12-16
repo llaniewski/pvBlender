@@ -36,38 +36,45 @@ from bpy.app.handlers import persistent
 from . import pvnodes,inspector,object,polydata
 
 @persistent
-def post_init(something):
-    global vtknodes_tmp_mesh
-    print("------------------------- POST INIT  -------------------")
-    polydata.post_init(something)
+def pv_load_post(something):
+    print("------------------------- POST LOAD  -------------------")
+    if 'ParaViewState' in bpy.data.texts:
+      data = bpy.data.texts['ParaViewState'].as_string()
+      with open('_tmp.xml', 'w') as file:
+        file.write(data)
+      paraview.simple.LoadState("_tmp.xml")
+    else:
+      bpy.data.texts.new('ParaViewState')
     for g in bpy.data.node_groups:
-        print(g)
         if type(g) == pvNodeTree:
             for n in g.nodes:
                 n.update()
 
-def post_init_once(something):
-    if post_init_once in bpy.app.handlers.scene_update_post:
-        bpy.app.handlers.scene_update_post.remove(post_init_once)
-    post_init(something)
+@persistent
+def pv_save_pre(something):
+    print("------ pvBlender: pre_save")
+    paraview.simple.SaveState("_tmp.xml")
+    with open('_tmp.xml', 'r') as file:
+      data = file.read()
+    bpy.data.texts['ParaViewState'].from_string(data)
 
 def register():
     global my_pvClasses, vtknodes_tmp_mesh
-    print("------------------------- REGISTER PV -------------------")
+    print("------ pvBlender: register plugin")
     bpy.utils.register_class(pvNodeTree)
     bpy.utils.register_class(pvNodeSocket)
     pvnodes.register()
     inspector.register()
     object.register()
-    if not post_init in bpy.app.handlers.load_post:
-        bpy.app.handlers.load_post.append(post_init)
-    if not post_init_once in bpy.app.handlers.scene_update_post:
-        bpy.app.handlers.scene_update_post.append(post_init_once)
+    if not pv_load_post in bpy.app.handlers.load_post:
+        bpy.app.handlers.load_post.append(pv_load_post)
+    if not pv_save_pre in bpy.app.handlers.save_pre:
+        bpy.app.handlers.save_pre.append(pv_save_pre)
     
 
 def unregister():
     global my_pvClasses
-    print("------------------------- UNREGISTER PV -------------------")
+    print("------ pvBlender: unregister plugin")
     pvnodes.unregister()
     inspector.unregister()
     object.unregister()

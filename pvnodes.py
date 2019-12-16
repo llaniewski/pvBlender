@@ -13,6 +13,8 @@ class pvPropNameType(bpy.types.PropertyGroup):
     layoutType : bpy.props.StringProperty()
     sceneProp : bpy.props.StringProperty()
 
+def sm_proxy(proxyName):
+    return paraview.simple.FindSource(proxyName)
 def sm_prop(proxyName,propName):
     return paraview.simple.FindSource(proxyName).GetProperty(propName).SMProperty
 
@@ -21,21 +23,35 @@ def sm_set(self,proxyName,propName,value):
     prop.SetElement(0, value)
     prop.GetParent().UpdateSelfAndAllInputs()
 
+def sm_set_fn(self,proxyName,propName,value):
+    prop = sm_prop(proxyName,propName)
+    prop.SetElement(0, value)
+    sm_proxy(proxyName).FileNameChanged()
+
 def sm_get(self,proxyName,propName):
     prop = sm_prop(proxyName,propName)
     ret = prop.GetElement(0)
     return ret
 
-def sm_set_v(self,proxyName,propName,value):
-    prop = sm_prop(proxyName,propName)
+def sm_set_elements(prop,value):
     n = prop.GetNumberOfElements()
     for i in range(n) :
         prop.SetElement(i, value[i])
-    prop.GetParent().UpdateSelfAndAllInputs()
+
+def sm_set_elements_varlen(prop,value):
+    prop.SetNumberOfElements(len(value))
+    for i in range(len(value)) :
+        prop.SetElement(i, value[i])
+
 
 def sm_get_elements(prop):
     n = prop.GetNumberOfElements()
     return [ prop.GetElement(i) for i in range(n) ]
+
+def sm_set_v(self,proxyName,propName,value):
+    prop = sm_prop(proxyName,propName)
+    sm_set_elements(prop,value)
+    prop.GetParent().UpdateSelfAndAllInputs()
 
 def sm_get_v(self,proxyName,propName):
     prop = sm_prop(proxyName,propName)
@@ -73,7 +89,10 @@ def sm_get_arraylist(self,proxyName,propName):
     prop = sm_prop(proxyName,propName)
     dom = get_prop_domains(prop)
     ret = sm_get_strings(dom[0])
-    val = prop.GetElement(4)
+    if prop.GetNumberOfElements() > 1:
+        val = prop.GetElement(prop.GetNumberOfElements()-1)
+    else:
+        val = -1
     try:
         i = ret.index(val)
     except ValueError:
@@ -86,6 +105,21 @@ def sm_get_strings(d):
     return ret
 
 
+def sm_get_enum_items(proxyName,propName):
+    prop = sm_prop(proxyName,propName)
+    dom = get_prop_domains(prop)
+    ret = [ (dom[0].GetEntryText(i),dom[0].GetEntryText(i),dom[0].GetEntryText(i),dom[0].GetEntryValue(i)) for i in range(dom[0].GetNumberOfEntries()) ]
+    print("enum_items:" + str(ret))
+    return ret
+
+def sm_set_enum(self,proxyName,propName,value):
+    prop = sm_prop(proxyName,propName)
+    prop.SetElement(0, value)
+    prop.GetParent().UpdateSelfAndAllInputs()
+
+def sm_get_enum(self,proxyName,propName):
+    prop = sm_prop(proxyName,propName)
+    return prop.GetElement(0)
 
 def dbg_set(self,proxyName,propName,value):
     pass
@@ -104,22 +138,46 @@ def prop_domains(prop):
 def get_prop_domains(prop):
     return [d for d in prop_domains(prop)]
 
+def sm_arrayselection_set(self,value):
+    prop = sm_prop(self.proxyName,self.propName)
+    if value:
+        val = '1'
+    else:
+        val = '0'
+    i = self.index*2
+    if i+1 < prop.GetNumberOfElements():
+        if prop.GetElement(i) == self.option:
+            prop.SetElement(i+1,val)
+
+def sm_arrayselection_get(self):
+    prop = sm_prop(self.proxyName,self.propName)
+    i = self.index*2
+    if i+1 < prop.GetNumberOfElements():
+        if prop.GetElement(i) == self.option:
+            return prop.GetElement(i+1) == '1'
+    return False
+
+    
+
 class ArraySelectionElement(bpy.types.PropertyGroup):
-    name : bpy.props.BoolProperty(name="selected")
+    value : bpy.props.BoolProperty(set=sm_arrayselection_set, get=sm_arrayselection_get )
+    proxyName : bpy.props.StringProperty()
+    propName  : bpy.props.StringProperty()
+    index : bpy.props.IntProperty()
+    option : bpy.props.StringProperty()
 
-
-def test_set(self,value):
+def sm_doublearray_set(self,value):
     prop = sm_prop(self.proxyName,self.propName)
     if (self.index >= prop.GetNumberOfElements()):
         prop.SetNumberOfElements(self.index+1)
     prop.SetElement(self.index, value)
-def test_get(self):
+def sm_doublearray_get(self):
     prop = sm_prop(self.proxyName,self.propName)
     return prop.GetElement(self.index)
 
 
 class DoubleArrayElement(bpy.types.PropertyGroup):
-    value : bpy.props.FloatProperty(set=test_set, get=test_get )
+    value : bpy.props.FloatProperty(set=sm_doublearray_set, get=sm_doublearray_get )
     proxyName : bpy.props.StringProperty()
     propName  : bpy.props.StringProperty()
     index : bpy.props.IntProperty()
@@ -136,8 +194,11 @@ class AddButtonOperator(bpy.types.Operator):
         ret.propName = self.propName
         ret.proxyName = self.proxyName
         ret.index = len(pr)-1
-        test_set(ret, 0)
+        sm_doublearray_set(ret, 0)
         return {'FINISHED'}
+
+def node_update(self, context):
+    bpy.context.active_node.update()
 
 def create_pv_prop(proxyName, propName):
     prop = sm_prop(proxyName,propName)
@@ -150,7 +211,9 @@ def create_pv_prop(proxyName, propName):
                 return ('standard', bpy.props.StringProperty(
                     description=desc,name=nm,
                     subtype="FILE_PATH",
-                    update=lambda self,context: fn_update(self,context,p)))
+                    set=lambda self,value: sm_set_fn(self,proxyName,propName,value),
+                    get=lambda self: sm_get(self,proxyName,propName),
+                    update=node_update))
             if type(dom[0]) == vtkPVServerManagerCorePython.vtkSMArrayListDomain:
                 return ('standard', bpy.props.EnumProperty(
                     description=desc,name=nm,
@@ -163,7 +226,7 @@ def create_pv_prop(proxyName, propName):
 #                    items=lambda self, context: sm_get_items(dom[0]),
 #                    set=lambda self,value: sm_set_arrayselection(self,proxyName,propName,dom[0],value),
 #                    get=lambda self: sm_get_arrayselection(self,proxyName,propName,dom[0]))
-                return ('standard', bpy.props.CollectionProperty(
+                return ('ArraySelection', bpy.props.CollectionProperty(
                     description=desc,name=nm,
                     type=ArraySelectionElement))
         if len(dom) == 0:
@@ -203,6 +266,13 @@ def create_pv_prop(proxyName, propName):
                         description=desc,name=nm,
                         set=lambda self,value: sm_set(self,proxyName,propName,value),
                         get=lambda self: sm_get(self,proxyName,propName)))
+            if type(dom[0]) == vtkPVServerManagerCorePython.vtkSMEnumerationDomain:
+                if prop.GetNumberOfElements() == 1:
+                    return ('standard', bpy.props.EnumProperty(
+                        description=desc,name=nm,
+                        items=sm_get_enum_items(proxyName,propName),
+                        set=lambda self,value: sm_set_enum(self,proxyName,propName,value),
+                        get=lambda self: sm_get_enum(self,proxyName,propName)))
             if prop.GetNumberOfElements() > 1:
                 return ('standard', bpy.props.IntVectorProperty(
                     size=prop.GetNumberOfElements(),
@@ -242,6 +312,10 @@ class pvNode:
                     ret.sceneProp = n.sceneProp
                     ret.propName = n.propName
                     ret.proxyName = self.proxyName
+                elif n.layoutType == "ArraySelection":
+                    layout.label(text = n.propName + ":")
+                    for k in pr:
+                        layout.prop(k,'value',text=k.option)
                 else:
                     layout.prop(context.scene, n.sceneProp)
     def init_data(self):
@@ -254,36 +328,66 @@ class pvNode:
     def sm_prop(self, p):
         return pv().GetProperty(p)
     def pv_props(self):
-        op = {str(n) for n in self.pv().ListProperties()}
-        ap = {str(n.propName) for n in self.propertyNames}
-        mp = {p for p in ap if hasattr(type(self),p)}
-        sp = {p.name for p in self.inputs}
-        ip = set()
-        pp = op - mp - sp
-        if len(pp) > 0:
-            print("Adding to",self.bl_label,"properties:",pp)
-        for p in pp:
+        propertyNames = {str(n.propName) for n in self.propertyNames}
+        inputNames = {p.name for p in self.inputs}
+        for p in self.pv().ListProperties():
             prop = self.pv().GetProperty(p)
             if type(prop) == paraview.servermanager.InputProperty:
-                ip.add(p)
+                if p not in inputNames:
+                    self.inputs.new("pvNodeSocket", p)
             else:
                 sceneProp = self.proxyName + "-" + p
-                (layoutType, bpy_prop) = create_pv_prop(self.proxyName,p)
-#                setattr(type(self),p,bpy_prop)
-                setattr(bpy.types.Scene, sceneProp, bpy_prop)
-                if p not in ap:
-                    it = self.propertyNames.add()
-                    it.sceneProp = sceneProp
-                    it.propName = p
-                    it.layoutType = layoutType
-        # Adding inputs later, because it triggers update
-        if len(ip) > 0:
-            print("Adding to",self.bl_label,"inputs:",ip)
-        for i in ip:
-            self.inputs.new("pvNodeSocket", i)
+                if hasattr(bpy.types.Scene, sceneProp):
+                    if p not in propertyNames:
+                        print("---------- WEIRD")
+                else:
+                    (layoutType, bpy_prop) = create_pv_prop(self.proxyName,p)
+                    setattr(bpy.types.Scene, sceneProp, bpy_prop)
+                    if p not in propertyNames:
+                        it = self.propertyNames.add()
+                        it.sceneProp = sceneProp
+                        it.propName = p
+                        it.layoutType = layoutType
+                    else:
+                        for n in self.propertyNames:
+                            if n.propName == p:
+                                n.sceneProp = sceneProp
+                                n.layoutType = layoutType
     def update(self):
         print("Update ",self.bl_label)
         self.pv_props()
+        for n in self.propertyNames:
+            if hasattr(bpy.context.scene, n.sceneProp):
+                pr = getattr(bpy.context.scene, n.sceneProp)
+                prop = sm_prop(self.proxyName, n.propName)
+                if n.layoutType == "DoubleArray":
+                    if len(pr) != prop.GetNumberOfElements():
+                        pr.clear()
+                        for i in range(prop.GetNumberOfElements()):
+                            ret = pr.add()
+                            ret.propName = n.propName
+                            ret.proxyName = self.proxyName
+                            ret.index = i
+                elif n.layoutType == "ArraySelection":
+                    dom = get_prop_domains(prop)
+                    opt = sm_get_strings(dom[0])
+                    if prop.GetNumberOfElements() != 2 * dom[0].GetNumberOfStrings():
+                        prop.SetNumberOfElements(2 * dom[0].GetNumberOfStrings())
+                        i = 0
+                        for o in sm_get_strings(dom[0]):
+                            prop.SetElement(2*i, o)
+                            prop.SetElement(2*i+1, '0')
+                            i = i + 1
+                    if len(pr) != dom[0].GetNumberOfStrings():
+                        pr.clear()
+                        i = 0
+                        for o in sm_get_strings(dom[0]):
+                            ret = pr.add()
+                            ret.propName = n.propName
+                            ret.proxyName = self.proxyName
+                            ret.index = i
+                            ret.option = o
+                            i = i + 1
         pv1 = self.pv()
         for socket in self.inputs:
             if socket.is_linked and len(socket.links) > 0:
@@ -304,7 +408,7 @@ from bpy.app.handlers import persistent
 
 def register():
     global my_pvClasses, vtknodes_tmp_mesh
-    print("------------------------- REGISTER PV -------------------")
+    print("------ pvBlender: register nodes")
     bpy.utils.register_class(pvPropNameType)
     bpy.utils.register_class(ArraySelectionElement)
     bpy.utils.register_class(DoubleArrayElement)
@@ -315,7 +419,7 @@ def register():
     def pvClass(k):
         c = "pvSimple" + k
         if c not in my_pvClasses:
-            print("adding class ",c,"with object", k)
+            #print("adding class ",c,"with object", k)
             new_class = type(c, (bpy.types.Node,pvNode), {
                 "bl_label": k,
                 "pvType": k
@@ -341,14 +445,15 @@ def register():
 
 def unregister():
     global my_pvClasses
-    print("------------------------- UNREGISTER PV -------------------")
+    print("------ pvBlender: unregister nodes")
     bpy.utils.unregister_class(pvPropNameType)
-    bpy.utils.unregister_class(pvPropString)
-    bpy.utils.unregister_class(pvPropFloat)
+    bpy.utils.unregister_class(ArraySelectionElement)
+    bpy.utils.unregister_class(DoubleArrayElement)
+    bpy.utils.unregister_class(AddButtonOperator)
     for c in my_pvClasses:
         new_class = getattr(sys.modules[__name__], c)
         if isinstance(new_class,type):
-            print("unregistering: ",c)
+            #print("unregistering: ",c)
             bpy.utils.unregister_class(new_class)
         else:
             print(c,"is not a class")
