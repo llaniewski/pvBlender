@@ -66,12 +66,15 @@ def sm_describe(prop):
     ret = ret + str(type(prop)) + str([str(type(d)) for d in dom])
     return ret
 
+items_bug_workaround = None
+
 def sm_get_items(proxyName,propName):
+    global items_bug_workaround
     prop = sm_prop(proxyName,propName)
     dom = get_prop_domains(prop)
     ret = sm_get_strings(dom[0])
-    ret = [ (s,s,s) for s in ret ]
-    return ret
+    items_bug_workaround = [ (s,s,s) for s in ret ]
+    return items_bug_workaround
 
 def sm_set_arraylist(self,proxyName,propName,value):
     prop = sm_prop(proxyName,propName)
@@ -106,11 +109,11 @@ def sm_get_strings(d):
 
 
 def sm_get_enum_items(proxyName,propName):
+    global items_bug_workaround
     prop = sm_prop(proxyName,propName)
     dom = get_prop_domains(prop)
-    ret = [ (dom[0].GetEntryText(i),dom[0].GetEntryText(i),dom[0].GetEntryText(i),dom[0].GetEntryValue(i)) for i in range(dom[0].GetNumberOfEntries()) ]
-    print("enum_items:" + str(ret))
-    return ret
+    items_bug_workaround = [ (dom[0].GetEntryText(i),dom[0].GetEntryText(i),dom[0].GetEntryText(i),dom[0].GetEntryValue(i)) for i in range(dom[0].GetNumberOfEntries()) ]
+    return items_bug_workaround
 
 def sm_set_enum(self,proxyName,propName,value):
     prop = sm_prop(proxyName,propName)
