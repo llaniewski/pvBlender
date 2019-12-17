@@ -1,7 +1,7 @@
 import bpy
 
 bl_info = {
-  "name": "VTK nodes",
+  "name": "ParaView Nodes",
   "category": "Node",
     "author":      "Lukasz Laniewski-Wollk",
     "version":     (0, 1, 0),
