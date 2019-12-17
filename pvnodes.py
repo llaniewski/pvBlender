@@ -10,6 +10,7 @@ from . import category
 
 class pvPropNameType(bpy.types.PropertyGroup):
     propName : bpy.props.StringProperty()
+    propLabel : bpy.props.StringProperty()
     layoutType : bpy.props.StringProperty()
     sceneProp : bpy.props.StringProperty()
 
@@ -206,19 +207,19 @@ def node_update(self, context):
 def create_pv_prop(proxyName, propName):
     prop = sm_prop(proxyName,propName)
     dom = get_prop_domains(prop)
-    desc=sm_describe(prop)
-    nm=propName
+    desc = sm_describe(prop)
+    nm = prop.GetXMLLabel()
     if type(prop) == vtkPVServerManagerCorePython.vtkSMStringVectorProperty:
         if len(dom) == 1:
             if type(dom[0]) == vtkPVServerManagerCorePython.vtkSMFileListDomain:
-                return ('standard', bpy.props.StringProperty(
+                return (nm, 'standard', bpy.props.StringProperty(
                     description=desc,name=nm,
                     subtype="FILE_PATH",
                     set=lambda self,value: sm_set_fn(self,proxyName,propName,value),
                     get=lambda self: sm_get(self,proxyName,propName),
                     update=node_update))
             if type(dom[0]) == vtkPVServerManagerCorePython.vtkSMArrayListDomain:
-                return ('standard', bpy.props.EnumProperty(
+                return (nm, 'standard', bpy.props.EnumProperty(
                     description=desc,name=nm,
                     items=lambda self, context: sm_get_items(proxyName,propName),
                     set=lambda self,value: sm_set_arraylist(self,proxyName,propName,value),
@@ -229,29 +230,29 @@ def create_pv_prop(proxyName, propName):
 #                    items=lambda self, context: sm_get_items(dom[0]),
 #                    set=lambda self,value: sm_set_arrayselection(self,proxyName,propName,dom[0],value),
 #                    get=lambda self: sm_get_arrayselection(self,proxyName,propName,dom[0]))
-                return ('ArraySelection', bpy.props.CollectionProperty(
+                return (nm, 'ArraySelection', bpy.props.CollectionProperty(
                     description=desc,name=nm,
                     type=ArraySelectionElement))
         if len(dom) == 0:
             if prop.GetNumberOfElements() == 1:
-                return ('standard', bpy.props.StringProperty(
+                return (nm, 'standard', bpy.props.StringProperty(
                     description=desc,name=nm,
                     set=lambda self,value: sm_set(self,proxyName,propName,value),
                     get=lambda self: sm_get(self,proxyName,propName)))
     if type(prop) == vtkPVServerManagerCorePython.vtkSMDoubleVectorProperty:
         if len(dom) == 1:
             if type(dom[0]) == vtkPVServerManagerCorePython.vtkSMArrayRangeDomain:
-                return ('DoubleArray', bpy.props.CollectionProperty(
+                return (nm, 'DoubleArray', bpy.props.CollectionProperty(
                     description=desc,name=nm,
                     type=DoubleArrayElement))
         if prop.GetNumberOfElements() > 1:
-            return ('standard', bpy.props.FloatVectorProperty(
+            return (nm, 'standard', bpy.props.FloatVectorProperty(
                 size=prop.GetNumberOfElements(),
                 description=desc,name=nm,
                 set=lambda self,value: sm_set_v(self,proxyName,propName,value),
                 get=lambda self: sm_get_v(self,proxyName,propName)))
         elif prop.GetNumberOfElements() == 1:
-            return ('standard', bpy.props.FloatProperty(
+            return (nm, 'standard', bpy.props.FloatProperty(
                 description=desc,name=nm,
                 set=lambda self,value: sm_set(self,proxyName,propName,value),
                 get=lambda self: sm_get(self,proxyName,propName)))
@@ -259,35 +260,35 @@ def create_pv_prop(proxyName, propName):
         if len(dom) == 1:
             if type(dom[0]) == vtkPVServerManagerCorePython.vtkSMBooleanDomain:
                 if prop.GetNumberOfElements() > 1:
-                    return ('standard', bpy.props.BoolVectorProperty(
+                    return (nm, 'standard', bpy.props.BoolVectorProperty(
                         size=prop.GetNumberOfElements(),
                         description=desc,name=nm,
                         set=lambda self,value: sm_set(self,proxyName,propName,value),
                         get=lambda self: sm_get(self,proxyName,propName)))
                 if prop.GetNumberOfElements() == 1:
-                    return ('standard', bpy.props.BoolProperty(
+                    return (nm, 'standard', bpy.props.BoolProperty(
                         description=desc,name=nm,
                         set=lambda self,value: sm_set(self,proxyName,propName,value),
                         get=lambda self: sm_get(self,proxyName,propName)))
             if type(dom[0]) == vtkPVServerManagerCorePython.vtkSMEnumerationDomain:
                 if prop.GetNumberOfElements() == 1:
-                    return ('standard', bpy.props.EnumProperty(
+                    return (nm, 'standard', bpy.props.EnumProperty(
                         description=desc,name=nm,
                         items=sm_get_enum_items(proxyName,propName),
                         set=lambda self,value: sm_set_enum(self,proxyName,propName,value),
                         get=lambda self: sm_get_enum(self,proxyName,propName)))
             if prop.GetNumberOfElements() > 1:
-                return ('standard', bpy.props.IntVectorProperty(
+                return (nm, 'standard', bpy.props.IntVectorProperty(
                     size=prop.GetNumberOfElements(),
                     description=desc,name=nm,
                     set=lambda self,value: sm_set_v(self,proxyName,propName,value),
                     get=lambda self: sm_get_v(self,proxyName,propName)))
             if prop.GetNumberOfElements() == 1:
-                return ('standard', bpy.props.IntProperty(
+                return (nm, 'standard', bpy.props.IntProperty(
                     description=desc,name=nm,
                     set=lambda self,value: sm_set(self,proxyName,propName,value),
                     get=lambda self: sm_get(self,proxyName,propName)))
-    return ('standard', bpy.props.StringProperty(
+    return (nm, 'standard', bpy.props.StringProperty(
         description=desc,name=nm,
         set=lambda self,value: dbg_set(self,proxyName,propName,value),
         get=lambda self: dbg_get(self,proxyName,propName)))
@@ -308,7 +309,7 @@ class pvNode:
             if hasattr(context.scene, n.sceneProp):
                 pr = getattr(context.scene, n.sceneProp)
                 if n.layoutType == "DoubleArray":
-                    layout.label(text = n.propName + ":")
+                    layout.label(text = n.propLabel + ":")
                     for k in pr:
                         layout.prop(k,'value',text='')
                     ret = layout.operator("pvblender.my_add_button_operator")
@@ -316,7 +317,7 @@ class pvNode:
                     ret.propName = n.propName
                     ret.proxyName = self.proxyName
                 elif n.layoutType == "ArraySelection":
-                    layout.label(text = n.propName + ":")
+                    layout.label(text = n.propLabel + ":")
                     for k in pr:
                         layout.prop(k,'value',text=k.option)
                 else:
@@ -344,18 +345,20 @@ class pvNode:
                     if p not in propertyNames:
                         print("---------- WEIRD")
                 else:
-                    (layoutType, bpy_prop) = create_pv_prop(self.proxyName,p)
+                    (label, layoutType, bpy_prop) = create_pv_prop(self.proxyName,p)
                     setattr(bpy.types.Scene, sceneProp, bpy_prop)
                     if p not in propertyNames:
                         it = self.propertyNames.add()
                         it.sceneProp = sceneProp
                         it.propName = p
+                        it.propLabel = label
                         it.layoutType = layoutType
                     else:
                         for n in self.propertyNames:
                             if n.propName == p:
                                 n.sceneProp = sceneProp
                                 n.layoutType = layoutType
+                                n.propLabel = label
     def update(self):
         print("Update ",self.bl_label)
         self.pv_props()
