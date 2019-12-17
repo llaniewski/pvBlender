@@ -6,7 +6,7 @@ bl_info = {
     "author":      "Lukasz Laniewski-Wollk",
     "version":     (0, 1, 0),
     "blender":     (2, 80, 0),
-    "location":    "VTK Nodes",
+    "location":    "ParaView Nodes",
     "category":    "Node",
     "warning":     "This version is still in development."
 }
