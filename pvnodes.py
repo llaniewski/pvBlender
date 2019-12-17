@@ -327,7 +327,6 @@ class pvNode:
         obj = getattr(sys.modules["paraview.simple"],self.pvType)()
         self.proxyName = obj.SMProxy.GetLogName()
     def pv(self):
-        print("pv():" + self.proxyName)
         return paraview.simple.FindSource(self.proxyName)
     def sm_prop(self, p):
         return pv().GetProperty(p)
@@ -397,12 +396,12 @@ class pvNode:
         pv1 = self.pv()
         for socket in self.inputs:
             if socket.is_linked and len(socket.links) > 0:
-                print("----------- Socket",socket.name,"connected!")
+                print("------ pvBlender: Socket",socket.name,"connected!")
                 other = socket.links[0].from_socket.node
                 pv2 = other.pv()
                 pv1.SetPropertyWithName(socket.name, pv2)
             else:
-                print("----------- Socket",socket.name,"disconnected!")
+                print("------ pvBlender: Socket",socket.name,"disconnected!")
                 pv1.SetPropertyWithName(socket.name, None)
             pv1.UpdatePipeline()
 
@@ -414,7 +413,7 @@ from bpy.app.handlers import persistent
 
 def register():
     global my_pvClasses, vtknodes_tmp_mesh
-    print("------ pvBlender: register nodes")
+    print("------ pvBlender: Register nodes")
     bpy.utils.register_class(pvPropNameType)
     bpy.utils.register_class(ArraySelectionElement)
     bpy.utils.register_class(DoubleArrayElement)
@@ -434,24 +433,22 @@ def register():
             setattr(sys.modules[__name__], c,new_class)
             my_pvClasses.append(c)
         return nodeitems_utils.NodeItem(c)
-        
     categories = [
-      category.pvNodeCategory("BVTK_SOURCES", "Sources",
+      category.pvNodeCategory("PVB_SOURCES", "Sources",
         items = pvClasses(paraview.servermanager.sources)),
-      category.pvNodeCategory("BVTK_FILTERS", "Filters",
+      category.pvNodeCategory("PVB_FILTERS", "Filters",
         items = pvClasses(paraview.servermanager.filters)),
-      category.pvNodeCategory("BVTK_WRITERS", "Writers",
+      category.pvNodeCategory("PVB_WRITERS", "Writers",
         items = pvClasses(paraview.servermanager.writers)),
-      category.pvNodeCategory("BVTK_OTHER", "Other",
+      category.pvNodeCategory("PVB_OTHER", "Other",
         items = [ pvClass("CreateLookupTable") ]),
     ]
-
-    nodeitems_utils.register_node_categories("BVTK_CATEGORIES", categories)
+    nodeitems_utils.register_node_categories("PVB_CATEGORIES", categories)
     
 
 def unregister():
     global my_pvClasses
-    print("------ pvBlender: unregister nodes")
+    print("------ pvBlender: Unregister nodes")
     bpy.utils.unregister_class(pvPropNameType)
     bpy.utils.unregister_class(ArraySelectionElement)
     bpy.utils.unregister_class(DoubleArrayElement)
@@ -464,6 +461,6 @@ def unregister():
         else:
             print(c,"is not a class")
     my_pvClasses = []
-    nodeitems_utils.unregister_node_categories("BVTK_CATEGORIES")
+    nodeitems_utils.unregister_node_categories("PVB_CATEGORIES")
 
 

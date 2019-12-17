@@ -16,12 +16,12 @@ import paraview.simple
 import paraview.servermanager
 
 class pvNodeTree(bpy.types.NodeTree):
-  bl_description = "VTK Node Tree"
+  bl_description = "ParaView Nodes"
   bl_icon = "MESH_TORUS"
-  bl_label = "VTK node tree"
+  bl_label = "ParaView Nodes"
 
 class pvNodeSocket(bpy.types.NodeSocket):
-  bl_label = "VTK Node Socket"
+  bl_label = "ParaView Node Socket"
   def draw(self, context, layout, node, x):
     layout.label(text=self.name)
   def draw_color(self, context, node):
@@ -37,7 +37,7 @@ from . import pvnodes,inspector,object,polydata
 
 @persistent
 def pv_load_post(something):
-    print("------------------------- POST LOAD  -------------------")
+    print("------ pvBlender: Post load")
     if 'ParaViewState' in bpy.data.texts:
       data = bpy.data.texts['ParaViewState'].as_string()
       with open('_tmp.xml', 'w') as file:
@@ -52,7 +52,7 @@ def pv_load_post(something):
 
 @persistent
 def pv_save_pre(something):
-    print("------ pvBlender: pre_save")
+    print("------ pvBlender: Pre save")
     paraview.simple.SaveState("_tmp.xml")
     with open('_tmp.xml', 'r') as file:
       data = file.read()
@@ -60,7 +60,7 @@ def pv_save_pre(something):
 
 def register():
     global my_pvClasses, vtknodes_tmp_mesh
-    print("------ pvBlender: register plugin")
+    print("------ pvBlender: Register plugin")
     bpy.utils.register_class(pvNodeTree)
     bpy.utils.register_class(pvNodeSocket)
     pvnodes.register()
@@ -74,7 +74,7 @@ def register():
 
 def unregister():
     global my_pvClasses
-    print("------ pvBlender: unregister plugin")
+    print("------ pvBlender: Unregister plugin")
     pvnodes.unregister()
     inspector.unregister()
     object.unregister()
